@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Score Progression</title>
+
+    <style>
+        :root {
+            --highlighted-color: #2661ff;
+        }
+        html, body {
+            margin: 20px;
+            padding: 0;
+            overflow: hidden;
+            font-family: sans-serif;
+        }
+        svg {
+            height: 100vh;
+            width: 100vw;
+            user-select: none;
+        }
+        h1 {
+            margin: 0;
+        }
+        .small {
+            font: 2px sans-serif;
+        }
+        .score-divisor {
+            fill: black;
+            font-size: 1.5pt;
+        }
+        rect.final-score {
+            stroke: var(--highlighted-color);
+            stroke-width: 0.2pt;
+        }
+        span.final-score {
+            color: var(--highlighted-color);
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<h1>World Cup 2018 Score Progression Analysis</h1>
+
+<p>
+    An analysis of how matches progress, goal by goal.<br>
+    Scores go from red (more frequent) to yellow (less frequent).<br>
+    Final scores are highlighted with a <span class="final-score">border</span>.</p>
+
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <!-- arrowhead marker definition -->
+        <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" stroke="none" fill="#aaa"></path>
+        </marker>
+
+        <g id="score">
+            <g class="score">
+                <rect x="0" y="0" width="6" height="3" rx="0.8" ry="0.8" fill="#ddd" stroke="#aaa" stroke-width="0.1"></rect>
+                <text x="0" y="0" dx="1.5" dy="1.7" class="small score-left" alignment-baseline="middle" text-anchor="middle">0</text>
+                <text x="0" y="0" dx="3" dy="1.6" class="small score-divisor" alignment-baseline="middle" text-anchor="middle">-</text>
+                <text x="0" y="0" dx="4.5" dy="1.7" class="small score-right" alignment-baseline="middle" text-anchor="middle">0</text>
+            </g>
+        </g>
+
+        <line id="line-template" x1="0" y1="0" x2="0" y2="0" fill="none" stroke="#aaa" stroke-width="0.2" marker-end="url(#arrow)"></line>
+    </defs>
+</svg>
+
+<script>
+    class Match {
+        constructor (team1, team2, scoreProgression) {
+            this.team1 = team1;
+            this.team2 = team2;
+            this.scoreProgression = scoreProgression;
+        }
+    }
+    class App {
+        constructor () {
+            this.scoreTemplate = document.getElementById("score");
+            this.svg = document.querySelector("svg");
+            /** @type {Map<String, Element>} */
+            this.elementByScore = new Map();
+            /** @type {Map<String, Number>} */
+            this.countByScore = new Map();
+            /** @type {Set<String>} */
+            this.finalScores = new Set();
+
+            this.maximumOccurrence = 0;
+
+            this.matches = [
+                // Group phase
+                new Match("Russia", "Saudi Arabia", "<<<<<"),  // 5x0
+                new Match("Uruguay", "Egypt", "<"),  // 1x0
+                new Match("Iran", "Morocco", "<"),  // 1x0
+                new Match("Portugal", "Spain", "<><>><"),  // 3x3
+                new Match("France", "Australia", "<><"),  // 2x1
+                new Match("Argentina", "Iceland", "<>"),  // 1x1
+                new Match("Denmark", "Peru", "<"),  // 1x0
+                new Match("Croatia", "Nigeria", "<<"),  // 2x0
+                new Match("Serbia", "Costa Rica", "<"),  // 1x0
+                new Match("Mexico", "Germany", "<"),  // 1x0
+                new Match("Brazil", "Switzerland", "<>"),  // 1x1
+                new Match("Sweden", "Korea Republic", "<"),  // 1x0
+                new Match("Belgium", "Panama", "<<<"),  // 3x0
+                new Match("England", "Tunisia", "<><"),  // 2x1
+                new Match("Japan", "Colombia", "<><"),  // 2x1
+                new Match("Senegal", "Poland", "<<>"),  // 2x1
+                new Match("Russia", "Egypt", "<<<>"),  // 3x1
+                new Match("Portugal", "Morocco", "<"),  // 1x0
+                new Match("Uruguay", "Saudi Arabia", "<"),  // 1x0
+                new Match("Spain", "Iran", "<"),  // 1x0
+                new Match("Denmark", "Australia", "<>"),  // 1x1
+                new Match("France", "Peru", "<"),  // 1x0
+                new Match("Croatia", "Argentina", "<<<"),  // 3x0
+                new Match("Brazil", "Costa Rica", "<<"),  // 2x0
+                new Match("Nigeria", "Iceland", "<<"),  // 2x0
+                new Match("Serbia", "Switzerland", "<>>"),  // 1x2
+                new Match("Belgium", "Tunisia", "<<><<<>"),  // 5x2
+                new Match("Mexico", "Korea Republic", "<<>"),  // 2x1
+                new Match("Sweden", "Germany", "<>>"),  // 1x2
+                new Match("England", "Panama", "<<<<<<>"),  // 6x1
+                new Match("Senegal", "Japan", "<><>"),  // 2x2
+                new Match("Colombia", "Poland", "<<<"),  // 3x0
+                new Match("Uruguay", "Russia", "<<<"),  // 3x0
+                new Match("Egypt", "Saudi Arabia", "<>>"),  // 1x2
+                new Match("Morocco", "Spain", "<><>"),  // 2x2
+                new Match("Portugal", "Iran", "<>"),  // 1x1
+                new Match("Peru", "Australia", "<<"),  // 2x0
+                new Match("Denmark", "France", ""),  // 0x0
+                new Match("Argentina", "Nigeria", "<><"),  // 2x1
+                new Match("Korea Republic", "Germany", "<<"),  // 2x0
+                new Match("Sweden", "Mexico", "<<<"),  // 3x0
+                new Match("Brazil", "Serbia", "<<"),  // 2x0
+                new Match("Switzerland", "Costa Rica", "<><>"),  // 2x2
+                new Match("Poland", "Japan", "<"),  // 1x0
+                new Match("Colombia", "Senegal", "<"),  // 1x0
+                new Match("Panama", "Tunisia", "<>>"),  // 1x2
+                new Match("Belgium", "England", "<"),  // 1x0
+
+                // Knockout phase
+                new Match("France", "Argentina", "<>><<<>"),  // 4x3
+                new Match("Uruguay", "Portugal", "<><"),  // 2x1
+            ];
+
+            this.makeScore(0, 0, this.calculateX(0, 1), this.calculateY(0));
+            for (let totalGoals = 1; totalGoals <= App.MAX_GOALS; totalGoals++) {
+                for (let team1Score = totalGoals; team1Score > 0; team1Score--) {
+                    const team2Score = totalGoals - team1Score;
+                    const x = this.calculateX(team2Score, totalGoals);
+                    const y = this.calculateY(totalGoals);
+                    this.makeScore(team1Score, team2Score, x, y);
+                }
+            }
+
+            this.matches.forEach(match => this.processMatch(match));
+            this.updateOpacities();
+            this.highlightFinalScores();
+        }
+
+        updateOpacities() {
+            for (const [key, element] of this.elementByScore.entries()) {
+                const count = this.countByScore.get(key) || 0;
+                const opacityIndex = count / this.maximumOccurrence;
+
+                // const opacity = count ? 0.4 + 0.6 * opacityIndex : 0.05;
+                // element.setAttribute("opacity", opacity.toString());
+
+                if (count) {
+                    const inverseIndex = 1 - opacityIndex;
+                    const weightedInverseIndex = Math.pow(inverseIndex, 10);
+                    const redComponent = 105 + Math.trunc(150 * weightedInverseIndex);
+                    const redStr = redComponent.toString(16);
+                    const color = `#FF${redStr.length === 1 ? "0" : ""}${redStr}00`;
+                    element.querySelector("rect").setAttribute("fill", color);
+                }
+            }
+        }
+
+        highlightFinalScores() {
+            for (const key of this.finalScores) {
+                const element = this.elementByScore.get(key);
+                const rect = element.querySelector("rect");
+                rect.classList.add("final-score");
+            }
+        }
+
+        /**
+         * @param {Match} match
+         */
+        processMatch(match) {
+            const scoreProgression = match.scoreProgression;
+            const team1 = scoreProgression[0];
+            let team1Score = 0;
+            let team2Score = 0;
+            this.incrementScore(team1Score, team2Score);
+
+            for (const team of scoreProgression) {
+                team === team1 ? team1Score++ : team2Score++;
+                this.incrementScore(team1Score, team2Score);
+            }
+
+            const key = this.getKeyFromScore(team1Score, team2Score);
+            this.finalScores.add(key);
+        }
+
+        incrementScore(team1Score, team2Score) {
+            const key = this.getKeyFromScore(team1Score, team2Score);
+            let count = this.countByScore.get(key);
+            count = !count ? 1 : count + 1;
+            this.countByScore.set(key, count);
+
+            if (count > this.maximumOccurrence) {
+                this.maximumOccurrence = count;
+            }
+        }
+
+        getKeyFromScore(team1Score, team2Score) {
+            return `${team1Score}x${team2Score}`;
+        }
+
+        calculateY(numScores) {
+            return App.DELTA_Y * (numScores + 1);
+        }
+
+        calculateX(scoreIndex, numScores) {
+            const maxWidth = App.MAX_GOALS * App.SCORE_WIDTH + (App.MAX_GOALS - 1) * App.HORIZONTAL_SPACING;
+            const lineWidth = numScores * App.SCORE_WIDTH + (numScores - 1) * App.HORIZONTAL_SPACING;
+            return maxWidth / 2 - lineWidth / 2 + scoreIndex * (App.SCORE_WIDTH + App.HORIZONTAL_SPACING);
+        }
+
+        makeScore(team1Score, team2Score, x, y) {
+            const g = this.scoreTemplate.cloneNode(true);
+            const key = this.getKeyFromScore(team1Score, team2Score);
+            this.elementByScore.set(key, g.querySelector(".score"));
+            g.removeAttribute("score");
+            g.querySelector(".score-left").innerHTML = team1Score.toString();
+            g.querySelector(".score-right").innerHTML = team2Score.toString();
+            this.setGroupPosition(g, x, y);
+
+            if (team1Score + team2Score === 0) {
+                // 0x0 -> 1x0
+                const line = document.getElementById("line-template").cloneNode(true);
+                this.setLinePosition(line, App.SCORE_WIDTH / 2, App.SCORE_HEIGHT, App.SCORE_WIDTH / 2, App.DELTA_Y - 0.4);
+                g.appendChild(line);
+            } else if (team1Score + team2Score < App.MAX_GOALS) {
+                // left team scored
+                const lineLeft = document.getElementById("line-template").cloneNode(true);
+                this.setLinePosition(lineLeft, App.SCORE_WIDTH / 2 - 1.5, App.SCORE_HEIGHT, -0.4, App.DELTA_Y - 0.2);
+                g.appendChild(lineLeft);
+
+                // right team scored
+                const lineRight = document.getElementById("line-template").cloneNode(true);
+                this.setLinePosition(lineRight, App.SCORE_WIDTH / 2 + 1.5, App.SCORE_HEIGHT, App.SCORE_WIDTH + 0.4, App.DELTA_Y - 0.2);
+                g.appendChild(lineRight);
+            }
+
+            this.svg.appendChild(g);
+        }
+
+        setGroupPosition(element, x, y) {
+            element.setAttribute("transform", `translate(${x} ${y})`);
+        }
+
+        setLinePosition(line, x1, y1, x2, y2) {
+            line.setAttribute("x1", x1);
+            line.setAttribute("y1", y1);
+            line.setAttribute("x2", x2);
+            line.setAttribute("y2", y2);
+        }
+
+        static get MAX_GOALS() { return 9; }
+        static get SCORE_WIDTH() { return 6; }  // taken from the svg def
+        static get SCORE_HEIGHT() { return 3; }  // taken from the svg def
+        static get HORIZONTAL_SPACING() { return 2; }
+        static get DELTA_Y() { return 5; }
+        static get DELTA_X() { return App.SCORE_WIDTH + App.HORIZONTAL_SPACING; }
+    }
+
+    new App();
+</script>
+
+</body>
+</html>

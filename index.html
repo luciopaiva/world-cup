@@ -122,6 +122,8 @@
             this.finalScores = new Set();
             /** @type {Map<String, HTMLTableElement>} */
             this.matchesTableByFinalScore = new Map();
+            /** @type {Map<String, Set<String>>} */
+            this.intermediateScoresByFinalScore = new Map();
 
             this.maximumOccurrence = 0;
 
@@ -231,18 +233,33 @@
         processMatch(match) {
             const scoreProgression = match.scoreProgression;
             const team1 = scoreProgression[0];
+
+            const intermediateScores = new Set();
+
             match.team1Score = 0;
             match.team2Score = 0;
             const nullScoreKey = App.getKeyFromScore(match.team1Score, match.team2Score);
             this.incrementScore(nullScoreKey);
+            intermediateScores.add(nullScoreKey);
 
             for (const team of scoreProgression) {
                 team === team1 ? match.team1Score++ : match.team2Score++;
                 const key = App.getKeyFromScore(match.team1Score, match.team2Score);
                 this.incrementScore(key);
+                intermediateScores.add(key);
             }
 
             const finalScoreKey = App.getKeyFromScore(match.team1Score, match.team2Score);
+            intermediateScores.add(finalScoreKey);
+
+            let accumulatedScores = this.intermediateScoresByFinalScore.get(finalScoreKey);
+            if (accumulatedScores) {
+                for (const score of accumulatedScores) {
+                    intermediateScores.add(score);
+                }
+            }
+            this.intermediateScoresByFinalScore.set(finalScoreKey, intermediateScores);
+
             this.processFinalScore(match, finalScoreKey);
         }
 
@@ -327,6 +344,15 @@
         }
 
         onScoreMouseMove(key, event) {
+            const intermediateScores = this.intermediateScoresByFinalScore.get(key);
+            if (intermediateScores) {
+                this.dimAllScores();
+                for (const score of intermediateScores) {
+                    const element = this.elementByScore.get(score);
+                    element.setAttribute("opacity", "1");
+                }
+            }
+
             const table = this.matchesTableByFinalScore.get(key);
             if (table) {
                 this.tooltip.style.left = (event.clientX + 50) + "px";
@@ -339,6 +365,19 @@
 
         onScoreMouseOut(key, event) {
             this.tooltip.classList.add("hidden");
+            this.showAllScores();
+        }
+
+        dimAllScores() {
+            for (const element of this.elementByScore.values()) {
+                element.setAttribute("opacity", "0.1");
+            }
+        }
+
+        showAllScores() {
+            for (const element of this.elementByScore.values()) {
+                element.setAttribute("opacity", "1");
+            }
         }
 
         static setGroupPosition(element, x, y) {

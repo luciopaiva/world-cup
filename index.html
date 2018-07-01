@@ -37,6 +37,16 @@
             color: var(--highlighted-color);
             font-weight: bold;
         }
+        #tooltip {
+            position: absolute;
+            background-color: white;
+            border: 1px solid gray;
+            border-radius: 4px;
+            padding: 10px;
+        }
+        .hidden {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -68,24 +78,50 @@
     </defs>
 </svg>
 
+<div id="tooltip" class="hidden">
+    <table>
+        <tr>
+            <td>Brazil</td>
+            <td>2</td>
+            <td>x</td>
+            <td>0</td>
+            <td>Belgium</td>
+        </tr>
+        <tr>
+            <td>France</td>
+            <td>1</td>
+            <td>x</td>
+            <td>2</td>
+            <td>Uruguay</td>
+        </tr>
+    </table>
+</div>
+
 <script>
     class Match {
         constructor (team1, team2, scoreProgression) {
             this.team1 = team1;
             this.team2 = team2;
             this.scoreProgression = scoreProgression;
+
+            this.team1Score = -1;
+            this.team2Score = -1;
         }
     }
     class App {
         constructor () {
             this.scoreTemplate = document.getElementById("score");
             this.svg = document.querySelector("svg");
+            this.tooltip = document.getElementById("tooltip");
+
             /** @type {Map<String, Element>} */
             this.elementByScore = new Map();
             /** @type {Map<String, Number>} */
             this.countByScore = new Map();
             /** @type {Set<String>} */
             this.finalScores = new Set();
+            /** @type {Map<String, HTMLTableElement>} */
+            this.matchesTableByFinalScore = new Map();
 
             this.maximumOccurrence = 0;
 
@@ -144,19 +180,22 @@
                 new Match("Uruguay", "Portugal", "<><"),  // 2x1
             ];
 
-            this.makeScore(0, 0, this.calculateX(0, 1), this.calculateY(0));
-            for (let totalGoals = 1; totalGoals <= App.MAX_GOALS; totalGoals++) {
-                for (let team1Score = totalGoals; team1Score > 0; team1Score--) {
-                    const team2Score = totalGoals - team1Score;
-                    const x = this.calculateX(team2Score, totalGoals);
-                    const y = this.calculateY(totalGoals);
-                    this.makeScore(team1Score, team2Score, x, y);
-                }
-            }
-
+            this.generateScoreElements();
             this.matches.forEach(match => this.processMatch(match));
             this.updateOpacities();
             this.highlightFinalScores();
+        }
+
+        generateScoreElements() {
+            this.makeScore(0, 0, App.calculateX(0, 1), App.calculateY(0));
+            for (let totalGoals = 1; totalGoals <= App.MAX_GOALS; totalGoals++) {
+                for (let team1Score = totalGoals; team1Score > 0; team1Score--) {
+                    const team2Score = totalGoals - team1Score;
+                    const x = App.calculateX(team2Score, totalGoals);
+                    const y = App.calculateY(totalGoals);
+                    this.makeScore(team1Score, team2Score, x, y);
+                }
+            }
         }
 
         updateOpacities() {
@@ -192,21 +231,43 @@
         processMatch(match) {
             const scoreProgression = match.scoreProgression;
             const team1 = scoreProgression[0];
-            let team1Score = 0;
-            let team2Score = 0;
-            this.incrementScore(team1Score, team2Score);
+            match.team1Score = 0;
+            match.team2Score = 0;
+            const nullScoreKey = App.getKeyFromScore(match.team1Score, match.team2Score);
+            this.incrementScore(nullScoreKey);
 
             for (const team of scoreProgression) {
-                team === team1 ? team1Score++ : team2Score++;
-                this.incrementScore(team1Score, team2Score);
+                team === team1 ? match.team1Score++ : match.team2Score++;
+                const key = App.getKeyFromScore(match.team1Score, match.team2Score);
+                this.incrementScore(key);
             }
 
-            const key = this.getKeyFromScore(team1Score, team2Score);
-            this.finalScores.add(key);
+            const finalScoreKey = App.getKeyFromScore(match.team1Score, match.team2Score);
+            this.processFinalScore(match, finalScoreKey);
         }
 
-        incrementScore(team1Score, team2Score) {
-            const key = this.getKeyFromScore(team1Score, team2Score);
+        /**
+         * @param {Match} match
+         * @param {String} finalScoreKey
+         */
+        processFinalScore(match, finalScoreKey) {
+            this.finalScores.add(finalScoreKey);
+
+            let table = this.matchesTableByFinalScore.get(finalScoreKey);
+            if (!table) {
+                table = document.createElement("table");
+                this.matchesTableByFinalScore.set(finalScoreKey, table);
+            }
+
+            const row = table.insertRow();
+            row.insertCell().innerHTML = match.team1;
+            row.insertCell().innerHTML = match.team1Score;
+            row.insertCell().innerHTML = "-";
+            row.insertCell().innerHTML = match.team2Score;
+            row.insertCell().innerHTML = match.team2;
+        }
+
+        incrementScore(key) {
             let count = this.countByScore.get(key);
             count = !count ? 1 : count + 1;
             this.countByScore.set(key, count);
@@ -216,15 +277,15 @@
             }
         }
 
-        getKeyFromScore(team1Score, team2Score) {
+        static getKeyFromScore(team1Score, team2Score) {
             return `${team1Score}x${team2Score}`;
         }
 
-        calculateY(numScores) {
+        static calculateY(numScores) {
             return App.DELTA_Y * (numScores + 1);
         }
 
-        calculateX(scoreIndex, numScores) {
+        static calculateX(scoreIndex, numScores) {
             const maxWidth = App.MAX_GOALS * App.SCORE_WIDTH + (App.MAX_GOALS - 1) * App.HORIZONTAL_SPACING;
             const lineWidth = numScores * App.SCORE_WIDTH + (numScores - 1) * App.HORIZONTAL_SPACING;
             return maxWidth / 2 - lineWidth / 2 + scoreIndex * (App.SCORE_WIDTH + App.HORIZONTAL_SPACING);
@@ -232,38 +293,59 @@
 
         makeScore(team1Score, team2Score, x, y) {
             const g = this.scoreTemplate.cloneNode(true);
-            const key = this.getKeyFromScore(team1Score, team2Score);
-            this.elementByScore.set(key, g.querySelector(".score"));
-            g.removeAttribute("score");
+            const key = App.getKeyFromScore(team1Score, team2Score);
+
+            const coreGroup = g.querySelector(".score");
+            this.elementByScore.set(key, coreGroup);
+            coreGroup.setAttribute("data-score", key);
+            coreGroup.addEventListener("mousemove", this.onScoreMouseMove.bind(this, key));
+            coreGroup.addEventListener("mouseout", this.onScoreMouseOut.bind(this, key));
+
+            g.removeAttribute("id");
             g.querySelector(".score-left").innerHTML = team1Score.toString();
             g.querySelector(".score-right").innerHTML = team2Score.toString();
-            this.setGroupPosition(g, x, y);
+            App.setGroupPosition(g, x, y);
 
             if (team1Score + team2Score === 0) {
                 // 0x0 -> 1x0
                 const line = document.getElementById("line-template").cloneNode(true);
-                this.setLinePosition(line, App.SCORE_WIDTH / 2, App.SCORE_HEIGHT, App.SCORE_WIDTH / 2, App.DELTA_Y - 0.4);
+                App.setLinePosition(line, App.SCORE_WIDTH / 2, App.SCORE_HEIGHT, App.SCORE_WIDTH / 2, App.DELTA_Y - 0.4);
                 g.appendChild(line);
             } else if (team1Score + team2Score < App.MAX_GOALS) {
                 // left team scored
                 const lineLeft = document.getElementById("line-template").cloneNode(true);
-                this.setLinePosition(lineLeft, App.SCORE_WIDTH / 2 - 1.5, App.SCORE_HEIGHT, -0.4, App.DELTA_Y - 0.2);
+                App.setLinePosition(lineLeft, App.SCORE_WIDTH / 2 - 1.5, App.SCORE_HEIGHT, -0.4, App.DELTA_Y - 0.2);
                 g.appendChild(lineLeft);
 
                 // right team scored
                 const lineRight = document.getElementById("line-template").cloneNode(true);
-                this.setLinePosition(lineRight, App.SCORE_WIDTH / 2 + 1.5, App.SCORE_HEIGHT, App.SCORE_WIDTH + 0.4, App.DELTA_Y - 0.2);
+                App.setLinePosition(lineRight, App.SCORE_WIDTH / 2 + 1.5, App.SCORE_HEIGHT, App.SCORE_WIDTH + 0.4, App.DELTA_Y - 0.2);
                 g.appendChild(lineRight);
             }
 
             this.svg.appendChild(g);
         }
 
-        setGroupPosition(element, x, y) {
+        onScoreMouseMove(key, event) {
+            const table = this.matchesTableByFinalScore.get(key);
+            if (table) {
+                this.tooltip.style.left = (event.clientX + 50) + "px";
+                this.tooltip.style.top = event.clientY + "px";
+                this.tooltip.innerHTML = "";
+                this.tooltip.appendChild(this.matchesTableByFinalScore.get(key));
+                this.tooltip.classList.remove("hidden");
+            }
+        }
+
+        onScoreMouseOut(key, event) {
+            this.tooltip.classList.add("hidden");
+        }
+
+        static setGroupPosition(element, x, y) {
             element.setAttribute("transform", `translate(${x} ${y})`);
         }
 
-        setLinePosition(line, x1, y1, x2, y2) {
+        static setLinePosition(line, x1, y1, x2, y2) {
             line.setAttribute("x1", x1);
             line.setAttribute("y1", y1);
             line.setAttribute("x2", x2);

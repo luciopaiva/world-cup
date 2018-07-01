@@ -182,7 +182,7 @@
             /** @type {Map<String, HTMLTableElement>} */
             this.matchesTableByFinalScore = new Map();
             /** @type {Map<String, Set<String>>} */
-            this.intermediateScoresByScore = new Map();
+            this.intermediateScoresByFinalScore = new Map();
 
             this.maximumOccurrence = 0;
 
@@ -293,37 +293,33 @@
             const scoreProgression = match.scoreProgression;
             const team1 = scoreProgression[0];
 
+            const intermediateScores = new Set();
+
             match.team1Score = 0;
             match.team2Score = 0;
             const nullScoreKey = App.getKeyFromScore(match.team1Score, match.team2Score);
             this.incrementScore(nullScoreKey);
-            let scores = [nullScoreKey];
-            this.addIntermediateScores(nullScoreKey, scores);
+            intermediateScores.add(nullScoreKey);
 
             for (const team of scoreProgression) {
                 team === team1 ? match.team1Score++ : match.team2Score++;
                 const key = App.getKeyFromScore(match.team1Score, match.team2Score);
                 this.incrementScore(key);
-                scores.push(key);
-               this.addIntermediateScores(key, scores);
+                intermediateScores.add(key);
             }
 
             const finalScoreKey = App.getKeyFromScore(match.team1Score, match.team2Score);
-            scores.push(finalScoreKey);
-            this.addIntermediateScores(finalScoreKey, scores);
+            intermediateScores.add(finalScoreKey);
+
+            let accumulatedScores = this.intermediateScoresByFinalScore.get(finalScoreKey);
+            if (accumulatedScores) {
+                for (const score of accumulatedScores) {
+                    intermediateScores.add(score);
+                }
+            }
+            this.intermediateScoresByFinalScore.set(finalScoreKey, intermediateScores);
 
             this.processFinalScore(match, finalScoreKey);
-        }
-
-        addIntermediateScores(score, intermediateScores) {
-            let accumulatedScores = this.intermediateScoresByScore.get(score);
-            if (!accumulatedScores) {
-                accumulatedScores = new Set();
-                this.intermediateScoresByScore.set(score, accumulatedScores);
-            }
-            for (const intermediateScore of intermediateScores) {
-                accumulatedScores.add(intermediateScore);
-            }
         }
 
         /**
@@ -407,7 +403,7 @@
         }
 
         onScoreMouseMove(key, event) {
-            const intermediateScores = this.intermediateScoresByScore.get(key);
+            const intermediateScores = this.intermediateScoresByFinalScore.get(key);
             if (intermediateScores) {
                 this.dimAllScores();
                 for (const score of intermediateScores) {

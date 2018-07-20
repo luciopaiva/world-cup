@@ -243,24 +243,24 @@
                 new Match("Denmark", "Croatia", "<>"),  // 1x1
                 new Match("Brazil", "Mexico", "<<"),  // 2x0
                 new Match("Japan", "Belgium", "<<>>>"),  // 2x3
-                new Match("Sweden", "Szwitzerland", "<"),  // 1x0
+                new Match("Sweden", "Switzerland", "<"),  // 1x0
                 new Match("England", "Colombia", "<>"),  // 1x1
                 
                 // Quarter-finals
-                new Match("France", "Uruguay", "<<"), // 2x0
-                new Match("Belgium", "Brazil", "<<>"), // 2x1
-                new Match("England", "Sweden", "<<"), // 2x0
-                new Match("Russia", "Croatia", "<>><"), // 2x2
+                new Match("France", "Uruguay", "<<"),  // 2x0
+                new Match("Belgium", "Brazil", "<<>"),  // 2x1
+                new Match("England", "Sweden", "<<"),  // 2x0
+                new Match("Russia", "Croatia", "<>><"),  // 2x2
                 
                 // Semi-finals
-                // new Match("France", "Belgium", ""), // 0x0
-                // new Match("Croatia", "England", ""), // 0x0
+                new Match("France", "Belgium", "<"),  // 1x0
+                new Match("England", "Croatia", "<>>"), // 1x2
                 
                 // Third place play-off
-                // new Match("", "", ""), // 0x0
+                new Match("Belgium", "England", "<<"), // 2x0
                 
                 // Final
-                // new Match("", "", ""), // 0x0
+                new Match("France", "Croatia", "<><<<>"), // 4x2
             ];
 
             this.generateScoreElements();
